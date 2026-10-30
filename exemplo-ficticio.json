@@ -31,7 +31,8 @@
  ],
  "ajustes": {"2026-12|salario": 10400, "2026-11|energia": 230},
  "pagos": {"2026-10|salario": true, "2026-10|dizimo": true, "2026-10|academia": true,
-           "2026-10|aluguel": true, "2026-10|condominio": true, "2026-10|cartao_exemplo": true},
+           "2026-10|aluguel": true, "2026-10|condominio": true, "2026-10|cartao_exemplo": true,
+           "2026-10|celular": true, "2026-10|energia": true, "2026-10|carro": true, "2026-10|internet": true},
  "lancamentos": [
   {"id": "ex0001", "valor": 212.35, "descricao": "Mercado", "data": "2026-10-06", "criado_em": "2026-10-06T19:10:00Z"},
   {"id": "ex0002", "valor": 38, "descricao": "Farmácia", "data": "2026-10-09", "criado_em": "2026-10-09T12:02:00Z"},
