@@ -17,7 +17,7 @@ const ABAS = [
   {id:'dados',    nome:'Dados',      olho:'Importar e exportar'},
 ];
 
-const S = {aba: 'resumo'};
+const S = {aba: 'resumo', semOffline: false};
 
 /* ---------------------------------------------------------------- avisos */
 let avisoTimer = null;
@@ -45,7 +45,8 @@ function render(){
     `<div class="cartao"><div class="rot">${esc(aba.nome)}</div>` +
     `<div class="nada">Tela em construção.</div></div>`;
 
-  $('#status').textContent = 'versão ' + VERSAO + ' · dados só neste aparelho';
+  $('#status').innerHTML = 'versão ' + VERSAO + ' · dados só neste aparelho' +
+    (S.semOffline ? ' · <span class="erro">modo sem internet indisponível</span>' : '');
 }
 
 function irAba(id){
@@ -58,5 +59,14 @@ $('#abas').addEventListener('click', e => {
   const bt = e.target.closest('[data-aba]');
   if(bt) irAba(bt.dataset.aba);
 });
+
+/* ---------------------------------------------------------------- service worker */
+if('serviceWorker' in navigator){
+  const jaTinha = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(jaTinha) aviso('App atualizado. Feche e abra de novo para usar a versão nova.');
+  });
+  navigator.serviceWorker.register('sw.js').catch(() => { S.semOffline = true; render(); });
+}
 
 render();
