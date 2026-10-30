@@ -131,6 +131,7 @@ function render(){
 }
 
 function irAba(id){
+  if(id !== S.aba) S.sim = {salario: null, meta: null};   // simulação vale só dentro da Projeção
   S.aba = id;
   render();
   window.scrollTo({top: 0});
@@ -352,10 +353,97 @@ function abaCiclo(){
   </button>`;
 }
 
+/* ---------------------------------------------------------------- tela Projeção */
+function abaProjecao(){
+  const pr = projecao();
+  const k1 = somaMes(K0(), 1);
+  const simAtivo = S.sim.salario != null || S.sim.meta != null;
+  const cartao = P().cartoes.find(c => c.recebe_dia_a_dia);
+  return `
+  <div class="cartao ${simAtivo ? 'heroi sim' : ''}">
+    <div class="rot">E se… (não salva até você mandar)</div>
+    <div class="grandes">
+      <button class="grande" style="text-align:left" data-acao="simular" data-qual="salario"><div class="mini">Salário</div><div class="n">${brl0(salarioDo(k1))}</div><div class="mini">${S.sim.salario != null ? 'simulando' : 'toque para simular'}</div></button>
+      <button class="grande" style="text-align:left" data-acao="simular" data-qual="meta"><div class="mini">Dia a dia / mês</div><div class="n">${brl0(metaDo(k1))}</div><div class="mini">${S.sim.meta != null ? 'simulando' : 'toque para simular'}</div></button>
+    </div>
+    ${simAtivo ? `<div class="linha-b" style="margin-top:12px">
+      <button class="bt fantasma" data-acao="limpar-sim">voltar ao plano</button>
+      <button class="bt cheio" data-acao="fixar-sim">salvar como plano</button></div>` : ''}
+  </div>
+
+  <div class="cartao">
+    <div class="rot">Saldo acumulado mês a mês</div>
+    <div class="grafico">${grafico(pr)}</div>
+    <div style="overflow-x:auto;margin-top:12px">
+      <table class="tab">
+        <tr><th>Mês</th><th>No mês</th><th>Acumulado</th></tr>
+        ${pr.linhas.map(l => `<tr class="${l === pr.piso && l.acum < 0 ? 'piso' : l === pr.azul ? 'azul' : ''} ${l.atual ? 'atual' : ''}">
+          <td>${nomeMes(l.k)}</td>
+          <td class="${l.res < 0 ? 'neg' : 'pos'}">${l.res >= 0 ? '+' : ''}${brl0(l.res)}</td>
+          <td class="${l.acum < 0 ? 'neg' : 'pos'}">${brl0(l.acum)}</td></tr>`).join('')}
+      </table>
+    </div>
+    <div class="mini" style="margin-top:12px">
+      A linha "agora" é o que falta do ciclo atual a partir do saldo de hoje.
+      As outras somam tudo de cada ciclo: salário, dízimo, contas, empréstimos, faturas e o dia a dia
+      (que entra na fatura ${cartao ? 'do ' + esc(cartao.nome) : 'do cartão'} do mês seguinte, até ela ser marcada como valor final).
+    </div>
+  </div>
+
+  <div class="cartao">
+    <div class="rot">O que mexe no pior momento</div>
+    ${sensibilidade(pr)}
+  </div>`;
+}
+
+// Quanto o pior momento melhora: recalcula a projeção de verdade com +/− R$ 100.
+function pisoCom(mudanca){
+  const guardado = {...S.sim};
+  const k1 = somaMes(K0(), 1);
+  if(mudanca.meta) S.sim.meta = metaDo(k1) + mudanca.meta;
+  if(mudanca.salario) S.sim.salario = salarioDo(k1) + mudanca.salario;
+  const pr = projecao();
+  S.sim = guardado;
+  return pr.linhas.find(l => l.k === mudanca.k).acum;
+}
+function sensibilidade(pr){
+  if(pr.piso.acum >= 0) return '<div class="nada">Sem buraco no horizonte.</div>';
+  const k = pr.piso.k, base = pr.piso.acum;
+  const dMeta = pisoCom({meta:-100, k}) - base;
+  const dSal = pisoCom({salario:100, k}) - base;
+  return `
+    <div class="item"><span>Cada R$ 100/mês a menos no dia a dia</span><span class="val pos">+${brl0(dMeta)}</span></div>
+    <div class="item"><span>Cada R$ 100 a mais de salário <span class="dia">já descontado o dízimo</span></span><span class="val pos">+${brl0(dSal)}</span></div>
+    <div class="item"><span>Uma entrada extra (venda, freela)</span><span class="val pos">+ o valor</span></div>
+    <div class="mini" style="margin-top:8px">Efeito medido em ${nomeMes(k)}, o pior momento.</div>`;
+}
+
+async function simularPlano({qual}){
+  const k1 = somaMes(K0(), 1);
+  const atual = qual === 'salario' ? salarioDo(k1) : metaDo(k1);
+  const r = await perguntar({rot:'Simular', titulo: qual === 'salario' ? 'Salário de cada mês' : 'Dia a dia por mês',
+    texto:'Só para ver o efeito. Nada é salvo até você tocar em "salvar como plano".',
+    campos:[{tipo:'numero', id:'v', valor:atual}], ok:'Simular'});
+  if(!r) return;
+  if(!numeroValido(r.v, true)){ aviso('Valor inválido.', true); return; }
+  S.sim[qual] = r.v;
+  render();
+}
+function limparSimulacao(){ S.sim = {salario:null, meta:null}; render(); }
+function fixarSimulacao(){
+  const s = S.sim;
+  S.sim = {salario:null, meta:null};
+  if(!salvar(p => {
+    if(s.salario != null) p.salario.valor = arred(s.salario);
+    if(s.meta != null) p.meta_dia_a_dia = arred(s.meta);
+  }, 'Plano atualizado ✓')) S.sim = s;
+}
+
 /* ---------------------------------------------------------------- telas prontas */
 const TELAS = {
   resumo: abaResumo,
   ciclo: abaCiclo,
+  projecao: abaProjecao,
 };
 
 /* ---------------------------------------------------------------- tela Dados */
@@ -517,6 +605,9 @@ const ACOES = {
   'pago': bt => alternarPago(bt.dataset),
   'editar-item': bt => editarItem(bt.dataset),
   'editar-saldo': editarSaldo,
+  'simular': bt => simularPlano(bt.dataset),
+  'limpar-sim': limparSimulacao,
+  'fixar-sim': fixarSimulacao,
 };
 
 document.addEventListener('click', e => {

@@ -76,6 +76,9 @@ h1{font-variation-settings:'wdth' 88;font-weight:800;font-size:clamp(26px,7.5vw,
 .heroi-sub b{color:var(--papel)}
 .heroi.sim{background:var(--ouro);border-color:var(--ouro)}
 .heroi.alerta{background:var(--vermelho);border-color:var(--vermelho)}
+.heroi .grande{background:rgba(255,255,255,.12);border-color:rgba(240,239,230,.35)}
+.heroi .grande .mini{color:rgba(240,239,230,.85)}
+.heroi .bt.fantasma{color:var(--papel);border-color:rgba(240,239,230,.55);background:transparent}
 .risco{position:absolute;right:-30px;top:-30px;width:120px;height:120px;border:1.5px solid rgba(240,239,230,.13);border-radius:50%}
 
 /* ---------- barra ---------- */
