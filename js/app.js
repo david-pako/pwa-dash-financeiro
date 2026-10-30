@@ -439,11 +439,111 @@ function fixarSimulacao(){
   }, 'Plano atualizado ✓')) S.sim = s;
 }
 
+/* ---------------------------------------------------------------- tela Gastos */
+function abaGastos(){
+  const k = K0(), c = cicloInfo(k), meta = metaDo(k);
+  const semanas = semanasDoCiclo(k);
+  const sm = semanas.find(s => s.atual) || semanas[semanas.length - 1];
+  const resta = sm.orc - sm.gasto;
+  const diasRestam = Math.max(1, Math.round((sm.fim - HOJE) / 864e5) + 1);
+  const doCiclo = lancamentosDe(c.ini, c.fim);
+  const gCiclo = soma(doCiclo);
+  const pctCiclo = meta > 0 ? Math.min(100, gCiclo / meta * 100) : 100;
+  const sub = resta < 0
+    ? `Passou <b>${brl0(-resta)}</b> desta semana. Na próxima o valor volta ao normal, mas o ciclo sente.`
+    : `De <b>${brl0(sm.orc)}</b> da semana, já foram <b>${brl0(sm.gasto)}</b>. Dá <b>${brl(resta / diasRestam)}</b> por dia nos ${plural(diasRestam, 'dia', 'dias')} que faltam.`;
+
+  return `
+  <div class="cartao heroi ${resta < 0 ? 'alerta' : ''}">
+    <div class="risco"></div>
+    <div class="rot">Resta esta semana · ${dm(sm.ini)} a ${dm(sm.fim)}</div>
+    <div class="heroi-n"><span class="cif">R$</span>${resta < 0 ? '−' : ''}${fmt2(resta)}</div>
+    <div class="heroi-sub">${sub}</div>
+  </div>
+
+  <div class="cartao">
+    <div class="rot">Anotar um gasto</div>
+    <div class="linha-b">
+      <button class="bt" data-acao="lancar" data-valor="10">+10</button>
+      <button class="bt" data-acao="lancar" data-valor="20">+20</button>
+      <button class="bt" data-acao="lancar" data-valor="50">+50</button>
+      <button class="bt cheio" data-acao="lancar-outro">outro</button>
+    </div>
+    <div class="mini" style="margin-top:11px">Mercado, farmácia, lanche: tudo que sai do dia a dia. Contas fixas não entram aqui.</div>
+  </div>
+
+  <div class="cartao">
+    <div class="rot">${nomeCiclo(k)} · meta ${brl0(meta)}</div>
+    <div class="barra"><i class="${gCiclo >= meta ? 'estouro' : gCiclo > meta * .75 ? 'alto' : ''}" style="width:${pctCiclo}%"></i></div>
+    <div class="legenda"><span>Já foram <b>${brl0(gCiclo)}</b></span><span>${gCiclo <= meta ? 'faltam <b>' + brl0(meta - gCiclo) + '</b>' : 'passou <b>' + brl0(gCiclo - meta) + '</b>'}</span></div>
+    <div style="margin-top:8px">
+    ${semanas.map(s => `<div class="item"><span>Semana ${s.n}${s.atual ? '<span class="tag ouro">agora</span>' : ''}<span class="dia">${dm(s.ini)} a ${dm(s.fim)}</span></span>
+      <span class="val ${s.futura ? '' : s.gasto > s.orc ? 'neg' : 'pos'}">${s.futura ? '—' : brl0(s.gasto)}<small>de ${brl0(s.orc)}</small></span></div>`).join('')}
+    </div>
+  </div>
+
+  <div class="cartao">
+    <div class="rot">Lançamentos do ciclo</div>
+    ${listaLancamentos(doCiclo, 'Nada anotado neste ciclo.')}
+    ${doCiclo.length ? '<div class="mini" style="margin-top:8px">Toque num lançamento para corrigir ou apagar.</div>' : ''}
+  </div>`;
+}
+
+function listaLancamentos(lista, vazio){
+  if(!lista.length) return `<div class="nada">${vazio}</div>`;
+  const ordenada = lista.slice().sort((a, b) => (b.data + (b.criado_em || '')).localeCompare(a.data + (a.criado_em || '')));
+  return ordenada.map(l => `<button class="item" data-acao="editar-lanc" data-id="${esc(l.id)}">
+      <span><span class="nome">${l.descricao ? esc(l.descricao) : 'Gasto'}</span><span class="dia">${dm(dataDoIso(l.data))}</span></span>
+      <span class="val">${brl(l.valor)}</span></button>`).join('');
+}
+
+function lancar(valor, descricao = '', data = iso(HOJE)){
+  let item;
+  const ok = salvar(p => { item = adicionarLancamento(p, {valor, descricao, data}); }, 'Anotado: ' + brl(valor) + ' ✓');
+  return ok ? item : null;
+}
+
+async function lancarOutro(){
+  const r = await perguntar({rot:'Anotar', titulo:'Quanto foi?', campos:[
+    {tipo:'numero', id:'valor', valor:'', placeholder:'0,00'},
+    {tipo:'texto', id:'desc', rotulo:'O que foi (opcional)', valor:'', placeholder:'ex.: mercado, farmácia'},
+    {tipo:'data', id:'data', rotulo:'Quando', valor:iso(HOJE)},
+  ], ok:'Anotar'});
+  if(!r) return;
+  if(!numeroValido(r.valor)){ aviso('Valor inválido.', true); return; }
+  lancar(r.valor, r.desc, r.data);
+}
+
+async function editarLancamentoTela({id}){
+  const l = P().lancamentos.find(x => x.id === id);
+  if(!l) return;
+  const r = await perguntar({rot:'Lançamento', titulo:l.descricao || 'Gasto', campos:[
+    {tipo:'numero', id:'valor', rotulo:'Valor', valor:l.valor},
+    {tipo:'texto', id:'desc', rotulo:'O que foi', valor:l.descricao || ''},
+    {tipo:'data', id:'data', rotulo:'Quando', valor:l.data},
+  ], botoes:[
+    {valor:'cancelar', rotulo:'Cancelar', classe:'fantasma'},
+    {valor:'apagar', rotulo:'Apagar', classe:'perigo'},
+    {valor:'ok', rotulo:'Salvar', classe:'cheio'},
+  ]});
+  if(!r) return;
+  if(r.botao === 'apagar'){
+    const c = await perguntar({rot:'Apagar', titulo:'Apagar este lançamento?',
+      texto: esc(brl(l.valor) + (l.descricao ? ' · ' + l.descricao : '') + ' · ' + dm(dataDoIso(l.data))), ok:'Apagar',
+      botoes:[{valor:'cancelar', rotulo:'Cancelar', classe:'fantasma'}, {valor:'ok', rotulo:'Apagar', classe:'perigo'}]});
+    if(c) salvar(p => apagarLancamento(p, id), 'Apagado.');
+    return;
+  }
+  if(!numeroValido(r.valor)){ aviso('Valor inválido.', true); return; }
+  salvar(p => editarLancamento(p, id, {valor:r.valor, descricao:r.desc, data:r.data}), 'Lançamento corrigido ✓');
+}
+
 /* ---------------------------------------------------------------- telas prontas */
 const TELAS = {
   resumo: abaResumo,
   ciclo: abaCiclo,
   projecao: abaProjecao,
+  gastos: abaGastos,
 };
 
 /* ---------------------------------------------------------------- tela Dados */
@@ -608,6 +708,9 @@ const ACOES = {
   'simular': bt => simularPlano(bt.dataset),
   'limpar-sim': limparSimulacao,
   'fixar-sim': fixarSimulacao,
+  'lancar': bt => lancar(Number(bt.dataset.valor)),
+  'lancar-outro': lancarOutro,
+  'editar-lanc': bt => editarLancamentoTela(bt.dataset),
 };
 
 document.addEventListener('click', e => {
