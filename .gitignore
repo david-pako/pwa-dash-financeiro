@@ -1,0 +1,24 @@
+# Dados financeiros reais NUNCA entram no repositório.
+# Qualquer .json fica de fora (backups, planos exportados).
+*.json
+# Exceção: o arquivo de exemplo, que só tem dados fictícios.
+!exemplo-ficticio.json
+
+# Outros formatos que costumam carregar dados pessoais
+*.db
+*.sqlite
+*.xlsx
+*.xls
+*.csv
+*.ofx
+*.pdf
+*.pfx
+*.zip
+backup*
+.env
+
+# Arquivos do sistema e de editores
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
