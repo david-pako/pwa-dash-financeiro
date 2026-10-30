@@ -317,9 +317,45 @@ function abaResumo(){
   </button>`;
 }
 
+/* ---------------------------------------------------------------- tela Este ciclo */
+function abaCiclo(){
+  const k = K0(), fa = fluxoAtual();
+  const pend = fa.linhas.filter(i => !i.pago);
+  const entra = pend.filter(i => i.entrada).reduce((t, i) => t + i.valor, 0);
+  const sai = pend.filter(i => !i.entrada).reduce((t, i) => t + i.valor, 0);
+  const lancado = lancadoNo(k), meta = metaDo(k);
+  const pct = meta > 0 ? Math.min(100, lancado / meta * 100) : 100;
+  const cartao = P().cartoes.find(c => c.recebe_dia_a_dia);
+  return `
+  <div class="cartao">
+    <div class="rot">${nomeCiclo(k)}</div>
+    <div class="grandes">
+      <div class="grande"><div class="mini">Ainda entra</div><div class="n pos">${brl0(entra)}</div></div>
+      <div class="grande"><div class="mini">Ainda sai</div><div class="n">${brl0(sai)}</div></div>
+      <div class="grande"><div class="mini">Saldo hoje</div><div class="n">${brl0(P().saldo.valor)}</div></div>
+      <div class="grande"><div class="mini">Fecha em</div><div class="n ${fa.fim < 0 ? 'neg' : 'pos'}">${brl0(fa.fim)}</div></div>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <div class="rot">Tudo do ciclo</div>
+    ${fa.linhas.map(i => linhaItem(i, {saldo:true})).join('')}
+    <div class="mini" style="margin-top:8px">Quadrado = pago/recebido (mexe no saldo). Toque no nome para mudar o valor só deste ciclo.</div>
+  </div>
+
+  <button class="cartao" style="width:100%;text-align:left" data-aba="gastos">
+    <div class="rot">Dia a dia deste ciclo</div>
+    <div class="barra"><i class="${lancado >= meta ? 'estouro' : lancado > meta * .75 ? 'alto' : ''}" style="width:${pct}%"></i></div>
+    <div class="legenda"><span>Anotado: <b>${brl0(lancado)}</b></span><span>meta ${brl0(meta)}</span></div>
+    <div class="mini" style="margin-top:10px">Isso não sai da conta agora: vai para a fatura ${cartao ? 'do ' + esc(cartao.nome) : 'do cartão'} de ${nomeMes(somaMes(k, 1))}.
+      A projeção usa a meta ou o anotado, o que for maior. Toque para ver os gastos.</div>
+  </button>`;
+}
+
 /* ---------------------------------------------------------------- telas prontas */
 const TELAS = {
   resumo: abaResumo,
+  ciclo: abaCiclo,
 };
 
 /* ---------------------------------------------------------------- tela Dados */
