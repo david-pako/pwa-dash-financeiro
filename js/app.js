@@ -3,7 +3,7 @@
    Botões usam data-acao="..." (a CSP bloqueia onclick="..." no HTML). */
 'use strict';
 
-const VERSAO = '0.2.0';
+const VERSAO = '0.2.1';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -313,10 +313,21 @@ $('#arquivo').addEventListener('change', e => {
 /* ---------------------------------------------------------------- service worker */
 if('serviceWorker' in navigator){
   const jaTinha = !!navigator.serviceWorker.controller;
+  let recarregando = false;
+  // Versão nova assumiu: recarrega sozinho, a não ser que uma janela de diálogo esteja aberta.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if(jaTinha) aviso('App atualizado. Feche e abra de novo para usar a versão nova.');
+    if(!jaTinha || recarregando) return;
+    if($('#modal').open) return aviso('App atualizado. Feche e abra de novo para usar a versão nova.');
+    recarregando = true;
+    location.reload();
   });
-  navigator.serviceWorker.register('sw.js').catch(() => { S.semOffline = true; render(); });
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    // Procura versão nova ao abrir e ao voltar para o app (no celular ele pode ficar dias aberto).
+    // Sem internet a procura falha em silêncio, e o app segue com a versão guardada.
+    const procurar = () => reg.update().catch(() => {});
+    if(jaTinha) procurar();
+    document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') procurar(); });
+  }).catch(() => { S.semOffline = true; render(); });
 }
 
 /* ---------------------------------------------------------------- início */

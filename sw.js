@@ -5,7 +5,7 @@
    O navegador percebe que este arquivo mudou, baixa tudo de novo e apaga o cache antigo. */
 'use strict';
 
-const VERSAO = 'dash-v0.2.0';
+const VERSAO = 'dash-v0.2.1';
 const CASCA = [
   './',
   './index.html',
