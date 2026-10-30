@@ -41,10 +41,12 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if(req.method !== 'GET') return;
-  if(new URL(req.url).origin !== location.origin) return;
+  const url = new URL(req.url);
+  if(url.origin !== location.origin) return;
 
-  // Abrir o app (qualquer endereço dentro dele): sempre a página guardada
-  if(req.mode === 'navigate'){
+  // Abrir o app: sempre a página guardada. Outros endereços (ex.: abrir um .json direto) seguem o caminho normal.
+  const raiz = new URL('./', self.registration.scope).pathname;
+  if(req.mode === 'navigate' && (url.pathname === raiz || url.pathname === raiz + 'index.html')){
     e.respondWith(caches.match('./index.html').then(hit => hit || fetch(req)));
     return;
   }
