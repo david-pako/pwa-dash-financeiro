@@ -119,12 +119,10 @@ function render(){
   $('#abas .on').scrollIntoView({block:'nearest', inline:'nearest'});   // aba ativa sempre visível
 
   HOJE = hojeData();   // o app pode ficar aberto de um dia para o outro
-  const tela = TELAS[aba.id];
   $('#conteudo').innerHTML =
     aba.id === 'dados' ? abaDados() :
     !S.plano ? semDados() :
-    tela ? tela() :
-    `<div class="cartao"><div class="rot">${esc(aba.nome)}</div><div class="nada">Tela em construção.</div></div>`;
+    TELAS[aba.id]();
 
   $('#status').innerHTML = 'versão ' + VERSAO + ' · dados só neste aparelho' +
     (S.semOffline ? ' · <span class="erro">modo sem internet indisponível</span>' : '');
@@ -538,12 +536,105 @@ async function editarLancamentoTela({id}){
   salvar(p => editarLancamento(p, id, {valor:r.valor, descricao:r.desc, data:r.data}), 'Lançamento corrigido ✓');
 }
 
+/* ---------------------------------------------------------------- tela Ajustes */
+function abaAjustes(){
+  const p = P(), k0 = K0(), H = p.horizonte_meses || 12;
+  const meses = Array.from({length:H + 1}, (_, n) => somaMes(k0, n));
+  // linha clicável: atrs = atributos data-* que dizem o que editar
+  const linha = (rot, val, atrs, sub) => `<button class="item" ${atrs}>
+      <span><span class="nome">${rot}</span>${sub ? `<span class="dia">${sub}</span>` : ''}</span><span class="val">${val}</span></button>`;
+  return `
+  <div class="cartao">
+    <div class="rot">Números da casa</div>
+    ${linha('Saldo em conta', brl(p.saldo.valor), 'data-acao="editar-saldo"', p.saldo.conferido_em ? 'conferido em ' + dm(dataDoIso(p.saldo.conferido_em)) : 'sem data de conferência')}
+    ${linha('Salário previsto', brl(p.salario.valor), 'data-acao="editar-campo" data-qual="salario"', 'cai dia ' + p.salario.dia)}
+    ${linha('Dízimo', p.dizimo.pct.toLocaleString('pt-BR') + '% do salário', 'data-acao="editar-campo" data-qual="dizimo"', 'dia ' + p.dizimo.dia)}
+    ${linha('Dia a dia por mês (meta)', brl(p.meta_dia_a_dia), 'data-acao="editar-campo" data-qual="meta"', 'é a meta da tela Gastos e entra na projeção')}
+  </div>
+
+  ${p.cartoes.map(c => `
+  <div class="cartao">
+    <div class="rot">Faturas · ${esc(c.nome)} · vence dia ${c.vence}</div>
+    ${meses.map(k => {
+      const f = c.faturas[k];
+      const sub = f ? (f.final ? 'valor final' : c.recebe_dia_a_dia ? 'parcelas; o app soma o dia a dia' : 'parcelas') : 'sem lançamento';
+      return linha(nomeMes(k), f ? brl(f.v) : '—', `data-acao="editar-fatura" data-id="${esc(c.id)}" data-k="${k}"`, sub);
+    }).join('')}
+  </div>`).join('')}
+
+  <div class="cartao">
+    <div class="rot">Contas fixas</div>
+    ${p.contas.length ? p.contas.map(c => linha(esc(c.nome), brl(c.valor), `data-acao="editar-conta" data-id="${esc(c.id)}"`, c.dia ? 'dia ' + c.dia : 'sem dia certo')).join('') : '<div class="nada">Nenhuma conta fixa.</div>'}
+  </div>
+
+  <div class="cartao">
+    <div class="rot">Empréstimos</div>
+    ${p.dividas.length ? p.dividas.map(d => linha(esc(d.nome), brl(d.parcela), `data-acao="editar-divida" data-id="${esc(d.id)}"`, 'dia ' + d.dia + ' · até ' + nomeMes(d.ate))).join('') : '<div class="nada">Nenhum empréstimo.</div>'}
+  </div>
+
+  <div class="mini" style="text-align:center;padding:0 8px">Para mudanças maiores (conta nova, empréstimo novo), exporte o backup em Dados,
+    edite o arquivo e importe de volta.</div>`;
+}
+
+async function editarCampo({qual}){
+  const p = P();
+  const cfg = {
+    salario: {t:'Salário previsto', v:p.salario.valor, txt:'Vale para os próximos ciclos. Para um ciclo só, toque no Salário em "Este ciclo".'},
+    dizimo:  {t:'Dízimo (%)', v:p.dizimo.pct, txt:'Percentual sobre o salário de cada ciclo.'},
+    meta:    {t:'Dia a dia por mês', v:p.meta_dia_a_dia, txt:'É a meta da tela Gastos, dividida por semana, e o que a projeção soma na fatura do mês seguinte.'},
+  }[qual];
+  const r = await perguntar({rot:'Ajustes', titulo:cfg.t, texto:cfg.txt, campos:[{tipo:'numero', id:'v', valor:cfg.v}]});
+  if(!r) return;
+  if(!numeroValido(r.v, true)){ aviso('Valor inválido.', true); return; }
+  salvar(p => {
+    if(qual === 'salario') p.salario.valor = arred(r.v);
+    if(qual === 'dizimo') p.dizimo.pct = r.v;
+    if(qual === 'meta') p.meta_dia_a_dia = arred(r.v);
+  });
+}
+
+async function editarFatura({id, k}){
+  const c = P().cartoes.find(x => x.id === id);
+  const f = c.faturas[k];
+  const r = await perguntar({rot:'Fatura ' + c.nome, titulo:nomeMes(k),
+    texto: c.recebe_dia_a_dia ? 'Para meses futuros, use só as parcelas já compradas: o app soma o dia a dia pela meta. Marque "valor final" quando a fatura fechar.' : 'Valor que vence em ' + nomeMes(k) + '.',
+    campos:[{tipo:'numero', id:'v', valor:f ? f.v : ''}, {tipo:'check', id:'final', rotulo:'Valor final (fatura fechada)', valor:f ? !!f.final : false}]});
+  if(!r) return;
+  const vazio = !Number.isFinite(r.v);
+  if(!vazio && r.v < 0){ aviso('Valor inválido.', true); return; }
+  salvar(p => {
+    const faturas = p.cartoes.find(x => x.id === id).faturas;
+    if(vazio || (r.v === 0 && !r.final)) delete faturas[k];
+    else faturas[k] = {v:arred(r.v), final:!!r.final};
+  });
+}
+
+async function editarConta({id}){
+  const c = P().contas.find(x => x.id === id);
+  const r = await perguntar({rot:'Conta fixa', titulo:c.nome, texto:'Novo valor para todos os ciclos daqui pra frente.', campos:[{tipo:'numero', id:'v', valor:c.valor}]});
+  if(!r) return;
+  if(!numeroValido(r.v, true)){ aviso('Valor inválido.', true); return; }
+  salvar(p => { p.contas.find(x => x.id === id).valor = arred(r.v); });
+}
+
+async function editarDivida({id}){
+  const d = P().dividas.find(x => x.id === id);
+  const r = await perguntar({rot:'Empréstimo', titulo:d.nome, campos:[
+    {tipo:'numero', id:'v', rotulo:'Parcela', valor:d.parcela},
+    {tipo:'texto', id:'ate', rotulo:'Última parcela (ano-mês, ex.: 2027-03)', valor:d.ate},
+  ]});
+  if(!r) return;
+  if(!numeroValido(r.v, true) || !/^\d{4}-\d{2}$/.test(r.ate.trim())){ aviso('Confira a parcela e a data (ano-mês).', true); return; }
+  salvar(p => { const x = p.dividas.find(y => y.id === id); x.parcela = arred(r.v); x.ate = r.ate.trim(); });
+}
+
 /* ---------------------------------------------------------------- telas prontas */
 const TELAS = {
   resumo: abaResumo,
   ciclo: abaCiclo,
   projecao: abaProjecao,
   gastos: abaGastos,
+  ajustes: abaAjustes,
 };
 
 /* ---------------------------------------------------------------- tela Dados */
@@ -711,6 +802,10 @@ const ACOES = {
   'lancar': bt => lancar(Number(bt.dataset.valor)),
   'lancar-outro': lancarOutro,
   'editar-lanc': bt => editarLancamentoTela(bt.dataset),
+  'editar-campo': bt => editarCampo(bt.dataset),
+  'editar-fatura': bt => editarFatura(bt.dataset),
+  'editar-conta': bt => editarConta(bt.dataset),
+  'editar-divida': bt => editarDivida(bt.dataset),
 };
 
 document.addEventListener('click', e => {
