@@ -1,0 +1,44 @@
+{
+ "formato": 1,
+ "atualizado": "2026-10-30",
+ "inicio": "2026-10",
+ "saldo": {"valor": 2350.4, "conferido_em": "2026-10-28"},
+ "salario": {"valor": 5200, "dia": 5},
+ "dizimo": {"pct": 10, "dia": 6},
+ "meta_dia_a_dia": 1500,
+ "horizonte_meses": 12,
+ "contas": [
+  {"id": "aluguel", "nome": "Aluguel", "dia": 10, "valor": 1400, "casa": true, "nota": ""},
+  {"id": "condominio", "nome": "Condomínio", "dia": 10, "valor": 380, "casa": true, "nota": ""},
+  {"id": "energia", "nome": "Energia", "dia": 15, "valor": 180, "casa": true, "nota": "varia com o calor"},
+  {"id": "internet", "nome": "Internet", "dia": 20, "valor": 99.9, "casa": true, "nota": ""},
+  {"id": "celular", "nome": "Celular", "dia": 12, "valor": 49.9, "casa": false, "nota": ""},
+  {"id": "academia", "nome": "Academia", "dia": 7, "valor": 89.9, "casa": false, "nota": ""},
+  {"id": "presentes", "nome": "Presentes", "dia": null, "valor": 100, "casa": false, "nota": "sem dia fixo"}
+ ],
+ "dividas": [
+  {"id": "carro", "nome": "Empréstimo do carro", "dia": 15, "parcela": 620, "ate": "2027-06"},
+  {"id": "notebook", "nome": "Notebook parcelado", "dia": 25, "parcela": 210, "ate": "2027-01"}
+ ],
+ "cartoes": [
+  {"id": "cartao_exemplo", "nome": "Cartão Exemplo", "vence": 10, "fecha": 3, "recebe_dia_a_dia": true,
+   "faturas": {
+    "2026-10": {"v": 1630.4, "final": true},
+    "2026-11": {"v": 420, "final": false},
+    "2026-12": {"v": 310, "final": false},
+    "2027-01": {"v": 150, "final": false}
+   }}
+ ],
+ "ajustes": {"2026-12|salario": 10400, "2026-11|energia": 230},
+ "pagos": {"2026-10|salario": true, "2026-10|dizimo": true, "2026-10|academia": true,
+           "2026-10|aluguel": true, "2026-10|condominio": true, "2026-10|cartao_exemplo": true},
+ "lancamentos": [
+  {"id": "ex0001", "valor": 212.35, "descricao": "Mercado", "data": "2026-10-06", "criado_em": "2026-10-06T19:10:00Z"},
+  {"id": "ex0002", "valor": 38, "descricao": "Farmácia", "data": "2026-10-09", "criado_em": "2026-10-09T12:02:00Z"},
+  {"id": "ex0003", "valor": 64.5, "descricao": "Pizza", "data": "2026-10-11", "criado_em": "2026-10-11T22:40:00Z"},
+  {"id": "ex0004", "valor": 150, "descricao": "Combustível", "data": "2026-10-14", "criado_em": "2026-10-14T08:15:00Z"},
+  {"id": "ex0005", "valor": 189.9, "descricao": "Mercado", "data": "2026-10-20", "criado_em": "2026-10-20T18:30:00Z"},
+  {"id": "ex0006", "valor": 27.5, "descricao": "Padaria", "data": "2026-10-24", "criado_em": "2026-10-24T09:05:00Z"},
+  {"id": "ex0007", "valor": 120, "descricao": "Combustível", "data": "2026-10-28", "criado_em": "2026-10-28T07:50:00Z"}
+ ]
+}
