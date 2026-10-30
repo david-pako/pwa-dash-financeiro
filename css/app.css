@@ -85,6 +85,7 @@ h1{font-variation-settings:'wdth' 88;font-weight:800;font-size:clamp(26px,7.5vw,
 .barra i.estouro{background:var(--vermelho)}
 .legenda{display:flex;justify-content:space-between;gap:10px;margin-top:9px;font-size:12.5px;color:var(--lapis)}
 .legenda b{color:var(--tinta)}
+.legenda b.neg{color:var(--vermelho)}
 
 /* ---------- botões e campos ---------- */
 .linha-b{display:flex;gap:8px;flex-wrap:wrap}

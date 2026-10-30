@@ -5,12 +5,14 @@
    O navegador percebe que este arquivo mudou, baixa tudo de novo e apaga o cache antigo. */
 'use strict';
 
-const VERSAO = 'dash-v0.1.0';
+const VERSAO = 'dash-v0.2.0';
 const CASCA = [
   './',
   './index.html',
   './css/app.css',
+  './js/dados.js',
   './js/app.js',
+  './exemplo-ficticio.json',
   './manifest.webmanifest',
   './fonts/archivo-latin.woff2',
   './icons/icon-192.png',
