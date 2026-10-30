@@ -118,9 +118,12 @@ function render(){
     `${a.id === aba.id ? ' aria-current="page"' : ''}>${esc(a.nome)}</button>`).join('');
   $('#abas .on').scrollIntoView({block:'nearest', inline:'nearest'});   // aba ativa sempre visível
 
+  HOJE = hojeData();   // o app pode ficar aberto de um dia para o outro
+  const tela = TELAS[aba.id];
   $('#conteudo').innerHTML =
     aba.id === 'dados' ? abaDados() :
     !S.plano ? semDados() :
+    tela ? tela() :
     `<div class="cartao"><div class="rot">${esc(aba.nome)}</div><div class="nada">Tela em construção.</div></div>`;
 
   $('#status').innerHTML = 'versão ' + VERSAO + ' · dados só neste aparelho' +
@@ -138,6 +141,186 @@ function semDados(){
     <div class="texto">Este aparelho ainda não tem um plano. Importe um arquivo de backup ou carregue o exemplo fictício para conhecer o app.</div>
     <div class="linha-b" style="margin-top:14px"><button class="bt cheio" data-acao="ir-dados">Ir para Dados</button></div></div>`;
 }
+
+/* ---------------------------------------------------------------- salvar */
+const numeroValido = (n, podeZero) => Number.isFinite(n) && (podeZero ? n >= 0 : n > 0);
+
+// Aplica a mudança no plano e guarda no aparelho. Se não der, nada muda.
+function salvar(mudar, msgOk){
+  try{
+    S.plano = alterarPlano(S.plano, mudar);
+  }catch(e){
+    aviso(e.name === 'QuotaExceededError' ? 'Sem espaço neste aparelho: não salvou.' : e.message || 'Não consegui salvar.', true);
+    return false;
+  }
+  render();
+  aviso(msgOk || 'Salvo ✓');
+  return true;
+}
+
+/* ---------------------------------------------------------------- itens do ciclo (Resumo e Este ciclo) */
+function quandoTxt(i){
+  if(!i.quando) return 'quando precisar';
+  const dias = Math.round((i.quando - HOJE) / 864e5);
+  if(i.pago) return dm(i.quando);
+  if(dias < 0) return 'venceu ' + dm(i.quando);
+  if(dias === 0) return 'vence HOJE';
+  if(dias === 1) return 'amanhã · ' + dm(i.quando);
+  return dm(i.quando);
+}
+
+// Linha de um item: o quadrado marca pago/recebido; o nome abre a edição do valor.
+function linhaItem(i, opts = {}){
+  const atrasado = !i.pago && i.quando && i.quando < HOJE;
+  const hoje = !i.pago && i.quando && +i.quando === +HOJE;
+  const anterior = i.k < K0();
+  const tag = (anterior ? '<span class="tag" style="color:var(--vermelho)">ciclo anterior</span>' : '')
+    + (atrasado ? `<span class="tag" style="color:var(--vermelho)">${i.entrada ? 'chegou?' : 'atrasado?'}</span>` : hoje ? '<span class="tag ouro">hoje</span>' : '');
+  const saldo = (opts.saldo && i.saldo != null) ? `<small class="saldo-linha ${i.saldo < 0 ? 'neg' : ''}">saldo ${brl0(i.saldo)}</small>` : '';
+  const clicavel = i.k === K0() || i.k === somaMes(K0(), -1);
+  const alvo = `data-k="${i.k}" data-id="${esc(i.id)}"`;
+  return `<div class="item ${i.pago ? 'feito' : ''}">
+    <span class="esq">
+      ${clicavel ? `<button class="marcador" aria-label="${i.pago ? 'desmarcar' : i.entrada ? 'marcar como recebido' : 'marcar como pago'}" data-acao="pago" ${alvo}>${i.pago ? '✓' : ''}</button>`
+                 : `<span class="marcador" style="opacity:.35"></span>`}
+      <button style="text-align:left" data-acao="editar-item" ${alvo}>
+        <span class="nome">${esc(i.nome)}${tag}</span>
+        <span class="dia">${quandoTxt(i)}${i.nota ? ' · ' + esc(i.nota) : ''}</span>
+      </button>
+    </span>
+    <span class="val ${i.entrada ? 'pos' : ''}">${i.entrada ? '+' : ''}${brl(i.valor)}${saldo}</span>
+  </div>`;
+}
+
+function alternarPago({k, id}){
+  const i = itensDoCiclo(k).find(x => x.id === id);
+  if(!i) return;
+  const marcar = !i.pago, chave = k + '|' + id, sinal = i.entrada ? 1 : -1;
+  salvar(p => {
+    if(marcar){ p.pagos[chave] = true; p.saldo.valor = arred(p.saldo.valor + sinal * i.valor); }
+    else { delete p.pagos[chave]; p.saldo.valor = arred(p.saldo.valor - sinal * i.valor); }
+  }, marcar ? `${i.nome}: ${i.entrada ? 'recebido' : 'pago'} ✓ (saldo ${i.entrada ? '+' : '−'}${brl0(i.valor)})` : `${i.nome} desmarcado (saldo voltou)`);
+}
+
+async function editarItem({k, id}){
+  const i = itensDoCiclo(k).find(x => x.id === id);
+  if(!i) return;
+  const cartao = i.grupo === 'cartao';
+  const campos = [{tipo:'numero', id:'valor', rotulo: cartao ? 'Valor da fatura' : 'Valor neste ciclo', valor: cartao && !i.final ? i.base : i.valor}];
+  let texto = '';
+  if(cartao){
+    campos.push({tipo:'check', id:'final', rotulo:'Valor final (fatura fechada, com tudo)', valor: i.final || k <= K0()});
+    if(i.extra) texto = `Sem marcar "valor final", o app soma o dia a dia previsto (${brl0(i.extra)}) a este valor.`;
+  } else if(i.id !== 'salario' && i.id !== 'dizimo'){
+    texto = 'Muda só este ciclo. Para mudar todos os meses, use Ajustes.';
+  } else if(i.id === 'dizimo'){
+    texto = 'Padrão: ' + P().dizimo.pct + '% do salário deste ciclo (' + brl(Math.round(salarioDo(k) * P().dizimo.pct) / 100) + ').';
+  }
+  if(k === K0() || k === somaMes(K0(), -1)) campos.push({tipo:'check', id:'pago', rotulo: i.entrada ? 'Recebido (soma no saldo)' : 'Pago (sai do saldo)', valor:i.pago});
+  const r = await perguntar({rot:nomeCiclo(k), titulo:i.nome, texto, campos});
+  if(!r) return;
+  if(!numeroValido(r.valor, true)){ aviso('Valor inválido.', true); return; }
+  const novoValor = cartao && !r.final ? arred(r.valor + (i.extra || 0)) : r.valor;
+  salvar(p => {
+    const chave = k + '|' + i.id;
+    if(cartao){
+      p.cartoes.find(x => x.id === i.id).faturas[k] = {v:arred(r.valor), final:!!r.final};
+    } else {
+      if(Math.abs(r.valor - valorPadrao(i)) < 0.005) delete p.ajustes[chave];
+      else p.ajustes[chave] = arred(r.valor);
+    }
+    if(r.pago !== undefined && r.pago !== i.pago){
+      const sinal = i.entrada ? 1 : -1;
+      if(r.pago){ p.pagos[chave] = true; p.saldo.valor = arred(p.saldo.valor + sinal * novoValor); }
+      else { delete p.pagos[chave]; p.saldo.valor = arred(p.saldo.valor - sinal * i.valor); }
+    }
+  });
+}
+
+async function editarSaldo(){
+  const r = await perguntar({rot:'Saldo', titulo:'Quanto tem na conta agora?',
+    texto:'Use o número do app do banco. A partir dele, o app desconta o que você marcar como pago.',
+    campos:[{tipo:'numero', id:'v', valor:P().saldo.valor}]});
+  if(!r) return;
+  if(!Number.isFinite(r.v)){ aviso('Valor inválido.', true); return; }
+  salvar(p => { p.saldo = {...p.saldo, valor:arred(r.v), conferido_em:iso(HOJE)}; }, 'Saldo conferido ✓');
+}
+
+/* ---------------------------------------------------------------- gráfico da projeção */
+function grafico(pr){
+  const L = pr.linhas, W = 340, H = 176, topo = 16, base = 36, esq = 4, dir = 4;
+  const vals = L.map(l => l.acum);
+  const max = Math.max(0, ...vals), min = Math.min(0, ...vals), rng = (max - min) || 1;
+  const y = v => topo + (max - v) / rng * (H - topo - base);
+  const bw = (W - esq - dir) / L.length;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Saldo acumulado por mês">`;
+  svg += `<line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="#1E3A5F" stroke-width="1"/>`;
+  L.forEach((l, i) => {
+    const x = esq + i * bw + bw * .16, w = bw * .68;
+    const y1 = Math.min(y(l.acum), y(0)), h = Math.max(1, Math.abs(y(l.acum) - y(0)));
+    const cor = l.acum < 0 ? '#A8372B' : '#2D6A4F';
+    svg += `<rect x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${cor}" opacity="${l === pr.piso || l === pr.azul ? 1 : .62}"/>`;
+    svg += `<text x="${(x + w / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${nomeMes(l.k).slice(0, 3)}</text>`;
+  });
+  const marcar = (l, txt) => {
+    const i = L.indexOf(l), x = esq + i * bw + bw / 2;
+    const yy = l.acum < 0 ? y(l.acum) + 13 : Math.max(10, y(l.acum) - 4);
+    const anc = i < 2 ? 'start' : i > L.length - 3 ? 'end' : 'middle';
+    svg += `<text x="${x.toFixed(1)}" y="${yy.toFixed(1)}" text-anchor="${anc}" style="font-weight:700;fill:${l.acum < 0 ? '#A8372B' : '#2D6A4F'}">${txt}</text>`;
+  };
+  if(pr.piso.acum < 0) marcar(pr.piso, brl0(pr.piso.acum));
+  const ult = L[L.length - 1];
+  if(ult !== pr.piso) marcar(ult, brl0(ult.acum));
+  return svg + `</svg>`;
+}
+
+/* ---------------------------------------------------------------- tela Resumo */
+function abaResumo(){
+  const p = P(), fa = fluxoAtual(), pr = projecao(), prox = proximos();
+  const fim = fimCiclo(K0());
+  const agora = fa.linhas.filter(i => !i.pago && i.quando && (i.quando - HOJE) / 864e5 <= 3);
+  const seguintes = prox.filter(i => !i.quando || i.quando >= HOJE).slice(0, 10);
+  const primeiroNeg = prox.find(i => i.saldo < 0);
+  const conferido = p.saldo.conferido_em ? 'conferido em ' + dm(dataDoIso(p.saldo.conferido_em)) : 'sem data de conferência';
+
+  return `
+  <button class="cartao heroi ${p.saldo.valor < 0 ? 'alerta' : ''}" style="width:100%;text-align:left" data-acao="editar-saldo">
+    <div class="risco"></div>
+    <div class="rot">Saldo em conta · ${conferido}</div>
+    <div class="heroi-n"><span class="cif">R$</span>${p.saldo.valor < 0 ? '−' : ''}${fmt2(p.saldo.valor)}</div>
+    <div class="heroi-sub">Fim deste ciclo (${dm(fim)}): <b>${brl(fa.fim)}</b>.
+      ${!primeiroNeg ? '<br>Nada fica negativo nos próximos dois ciclos.'
+        : (primeiroNeg.quando && primeiroNeg.quando < HOJE) ? '<br>Com as contas ainda não marcadas, <b>o saldo já fica negativo</b>. Marque o que já pagou.'
+        : `<br>Fica negativo em <b>${primeiroNeg.quando ? dm(primeiroNeg.quando) : 'fim do ciclo'}</b>, no pagamento de ${esc(primeiroNeg.nome)}.`}
+      <br><span style="opacity:.7">toque para atualizar o saldo</span></div>
+  </button>
+
+  <div class="cartao">
+    <div class="rot">Para pagar agora</div>
+    ${agora.length ? agora.map(i => linhaItem(i)).join('') : '<div class="nada">Nada vencido nem vencendo nos próximos 3 dias.</div>'}
+    <div class="mini" style="margin-top:8px">Toque no quadrado quando pagar: o valor sai do saldo sozinho.</div>
+  </div>
+
+  <div class="cartao">
+    <div class="rot">Próximos vencimentos · com o saldo rolando</div>
+    ${seguintes.length ? seguintes.map(i => linhaItem(i, {saldo:true})).join('') : '<div class="nada">Nada pela frente.</div>'}
+  </div>
+
+  <button class="cartao" style="width:100%;text-align:left" data-aba="projecao">
+    <div class="rot">O plano até ${nomeMes(pr.linhas[pr.linhas.length - 1].k)}</div>
+    <div class="grandes">
+      <div class="grande"><div class="mini">Pior momento</div><div class="n ${pr.piso.acum < 0 ? 'neg' : 'pos'}">${brl0(pr.piso.acum)}</div><div class="mini">em ${nomeMes(pr.piso.k)}</div></div>
+      <div class="grande"><div class="mini">Volta ao azul</div><div class="n ${pr.azul || pr.piso.acum >= 0 ? 'pos' : 'neg'}">${pr.azul ? nomeMes(pr.azul.k) : pr.piso.acum >= 0 ? 'já está' : 'depois'}</div><div class="mini">${pr.azul ? brl0(pr.azul.acum) : pr.piso.acum >= 0 ? 'sem buraco' : 'fora do horizonte'}</div></div>
+    </div>
+    <div class="grafico" style="margin-top:12px">${grafico(pr)}</div>
+    <div class="mini" style="margin-top:6px">Salário ${brl0(salarioDo(somaMes(K0(), 1)))} · dia a dia ${brl0(metaDo(somaMes(K0(), 1)))}/mês · toque para detalhar</div>
+  </button>`;
+}
+
+/* ---------------------------------------------------------------- telas prontas */
+const TELAS = {
+  resumo: abaResumo,
+};
 
 /* ---------------------------------------------------------------- tela Dados */
 function abaDados(){
@@ -295,6 +478,9 @@ const ACOES = {
   'exemplo': carregarExemplo,
   'desfazer': desfazer,
   'baixar-bruto': baixarBruto,
+  'pago': bt => alternarPago(bt.dataset),
+  'editar-item': bt => editarItem(bt.dataset),
+  'editar-saldo': editarSaldo,
 };
 
 document.addEventListener('click', e => {
