@@ -3,14 +3,12 @@
    Botões usam data-acao="..." (a CSP bloqueia onclick="..." no HTML). */
 'use strict';
 
-const VERSAO = '0.2.1';
+const VERSAO = '0.3.0';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------------------------------------------------------------- formatação */
-const fmt2 = n => Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
-const brl  = n => (n < -0.004 ? '−' : '') + 'R$ ' + fmt2(n);
-const dm   = d => String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+// fmt2, brl, brl0, dm e nomeMes ficam em js/calculos.js
 const dma  = d => dm(d) + '/' + d.getFullYear();
 const dataDoIso = s => new Date(s + 'T12:00:00');
 const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
@@ -43,6 +41,7 @@ const S = {
   plano: null,          // o plano em uso (null = app vazio)
   erroDados: null,      // {erro, bruto} se o que está guardado tem problema
   persistente: null,    // true / false / null (não sabemos)
+  sim: {salario: null, meta: null},   // simulação da Projeção (não é salva)
   semOffline: false,
 };
 
