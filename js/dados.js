@@ -119,6 +119,13 @@ function validarPlano(p){
       });
     }
   }
+  // usados pela sincronização: quando o plano mudou e quais lançamentos foram apagados
+  if(p.alterado_em != null && typeof p.alterado_em !== 'string') erro('alterado_em', 'precisa ser um texto com data e hora');
+  if(p.apagados != null){
+    if(!ehObjeto(p.apagados)) erro('apagados', 'precisa ser um objeto { "id": "data e hora" }');
+    else for(const [id, quando] of Object.entries(p.apagados))
+      if(typeof quando !== 'string') erro('apagados.' + id, 'precisa ser um texto com data e hora');
+  }
   return erros;
 }
 
@@ -136,6 +143,7 @@ function normalizar(p){
   n.ajustes = n.ajustes || {};
   n.pagos = n.pagos || {};
   n.lancamentos = n.lancamentos || [];
+  n.apagados = n.apagados || {};
   n.horizonte_meses = n.horizonte_meses || 12;
   for(const c of n.cartoes) c.faturas = c.faturas || {};
   return n;
@@ -167,8 +175,16 @@ function alterarPlano(atual, mudar){
   mudar(novo);
   const erros = validarPlano(novo);
   if(erros.length) throw new Error('Mudança inválida: ' + erros[0]);
+  // Lançamentos têm data própria; "alterado_em" marca só o resto (saldo, contas, pagos...)
+  if(semLancamentos(novo) !== semLancamentos(atual)) novo.alterado_em = new Date().toISOString();
   guardarPlano(novo);
   return novo;
+}
+
+// O plano sem os lançamentos, como texto: serve para comparar se "o resto" mudou.
+function semLancamentos(p){
+  const {lancamentos, apagados, alterado_em, ...resto} = p;
+  return JSON.stringify(resto);
 }
 
 /* ---------------------------------------------------------------- importar e exportar */
@@ -252,18 +268,47 @@ function limparLancamento({valor, descricao, data}){
 
 // As três funções abaixo mexem no plano que recebem: use dentro de alterarPlano().
 function adicionarLancamento(p, dados){
-  const item = {id: novoId(), ...limparLancamento(dados), criado_em: new Date().toISOString()};
+  const agora = new Date().toISOString();
+  const item = {id: novoId(), ...limparLancamento(dados), criado_em: agora, alterado_em: agora};
   p.lancamentos.push(item);
   return item;
 }
 function editarLancamento(p, id, dados){
   const l = p.lancamentos.find(x => x.id === id);
   if(!l) throw new Error('Esse lançamento não existe mais.');
-  Object.assign(l, limparLancamento(dados));
+  Object.assign(l, limparLancamento(dados), {alterado_em: new Date().toISOString()});
   return l;
 }
+// Guarda o id do apagado, para outro aparelho não "ressuscitar" o lançamento ao sincronizar.
 function apagarLancamento(p, id){
   const n = p.lancamentos.findIndex(x => x.id === id);
   if(n < 0) throw new Error('Esse lançamento não existe mais.');
+  p.apagados = p.apagados || {};
+  p.apagados[id] = new Date().toISOString();
   return p.lancamentos.splice(n, 1)[0];
+}
+
+/* ---------------------------------------------------------------- juntar dois aparelhos */
+const versaoLanc = l => l.alterado_em || l.criado_em || '';
+
+// Junta o plano deste aparelho com o da nuvem, sem perder nada:
+// - lançamentos: todos os dos dois lados; se o mesmo foi corrigido nos dois, vale a correção mais recente;
+//   apagados em qualquer lado somem dos dois;
+// - o resto (saldo, contas, pagos...): vale o lado que mudou por último.
+function mesclarPlanos(local, remoto){
+  const l = normalizar(local), r = normalizar(remoto);
+  const base = (l.alterado_em || '') >= (r.alterado_em || '') ? l : r;
+  const junto = structuredClone(base);
+  junto.apagados = {...r.apagados};
+  for(const [id, quando] of Object.entries(l.apagados))
+    if(!junto.apagados[id] || quando > junto.apagados[id]) junto.apagados[id] = quando;
+  const porId = new Map();
+  for(const x of r.lancamentos.concat(l.lancamentos)){
+    const y = porId.get(x.id);
+    if(!y || versaoLanc(x) > versaoLanc(y)) porId.set(x.id, x);
+  }
+  junto.lancamentos = [...porId.values()]
+    .filter(x => !(x.id in junto.apagados))
+    .sort((a, b) => (a.data + (a.criado_em || '')).localeCompare(b.data + (b.criado_em || '')));
+  return junto;
 }
