@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Regras do Firestore usadas pela sincronização (cole em Firestore → Regras, no console do Firebase).
+// Cada conta só enxerga o próprio "cofre": um documento com o plano EMBARALHADO (js/cripto.js).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /cofres/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['v', 'sal', 'it', 'iv', 'cifra', 'em'])
+        && request.resource.data.cifra is string
+        && request.resource.data.cifra.size() < 900000;
+    }
+
+    // Todo o resto: fechado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
