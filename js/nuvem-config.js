@@ -5,9 +5,9 @@
 'use strict';
 
 const NUVEM_CONFIG = {
-  apiKey: '',      // Firebase: Configurações do projeto → Seus apps → apiKey
-  projectId: '',   // Firebase: Configurações do projeto → ID do projeto
-  clientId: '',    // Google Cloud: APIs e serviços → Credenciais → ID do cliente OAuth (Web client)
+  apiKey: 'AIzaSyBH-onqr500kalctpTZ2DrJTu-NWQzmoHU',   // Firebase: Configurações do projeto → Seus apps
+  projectId: 'pwa-dash-financeiro',                   // Firebase: Configurações do projeto
+  clientId: '975629038047-8u4kqkeg9jh94ku77t1e1fbob08brc83.apps.googleusercontent.com',   // Google Cloud: Credenciais (Web client)
   apis: {
     identidade: 'https://identitytoolkit.googleapis.com',
     token: 'https://securetoken.googleapis.com',
