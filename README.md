@@ -9,12 +9,23 @@ do dia a dia.
 ## Onde ficam os dados
 
 - **Este repositório não tem nenhum dado financeiro.** O código é público e o app abre vazio.
-- Os dados ficam **só no navegador do aparelho** de quem usa. Nada é enviado para servidor
-  nenhum.
+- Os dados ficam **no navegador do aparelho** de quem usa.
 - Os dados entram por **importação de um arquivo JSON** e saem por **exportação** (backup).
 - Importar **substitui tudo**. Por isso o app sempre sugere exportar um backup antes.
 - O app não carrega scripts nem fontes de outros sites.
-- Se houver PIN, ele só esconde a tela. **Ele não criptografa os dados.**
+
+### Sincronização (opcional)
+
+- Liga na tela **Dados**: entrar com Google e criar uma **frase-senha**.
+- Antes de sair do aparelho, o plano é **embaralhado com a frase-senha** (AES-GCM, chave tirada da
+  frase com PBKDF2). A nuvem (Firestore, do Firebase) só guarda o resultado embaralhado; nem o
+  Google consegue ler. **Se a frase-senha for esquecida, a cópia da nuvem não pode ser recuperada**
+  (os aparelhos e os backups continuam valendo).
+- O login vai à página do Google e volta com um comprovante: nenhum script do Google roda no app.
+  As únicas conexões de fora são com os endereços do Firebase.
+- As regras de acesso do Firestore estão em `firestore.rules`: cada conta só lê o próprio cofre.
+- Os identificadores em `js/nuvem-config.js` não são segredos; sem eles, a sincronização fica
+  desligada.
 
 ## Decisões do projeto
 
