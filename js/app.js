@@ -3,7 +3,7 @@
    Botões usam data-acao="..." (a CSP bloqueia onclick="..." no HTML). */
 'use strict';
 
-const VERSAO = '0.3.0';
+const VERSAO = '0.4.0';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -81,6 +81,7 @@ function perguntar({rot = '', titulo, texto = '', campos = [], ok = 'Salvar', bo
         const inp = document.createElement(c.tipo === 'area' ? 'textarea' : 'input');
         inp.className = 'campo'; inp.dataset.id = c.id;
         if(c.tipo === 'data') inp.type = 'date';
+        if(c.tipo === 'senha'){ inp.type = 'password'; inp.autocomplete = 'off'; inp.spellcheck = false; }
         if(c.tipo === 'numero'){
           inp.inputMode = 'decimal';
           inp.value = (c.valor === '' || c.valor == null) ? '' : Number(c.valor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2, useGrouping:false});
@@ -124,9 +125,19 @@ function render(){
     !S.plano ? semDados() :
     TELAS[aba.id]();
 
-  $('#status').innerHTML = 'versão ' + VERSAO + ' · dados só neste aparelho' +
+  pintarStatus();
+}
+
+function pintarStatus(){
+  const sync = N.estado === 'pronta' ? lerSync() : null;
+  $('#status').innerHTML = 'versão ' + VERSAO + ' · ' +
+    (!sync ? 'dados só neste aparelho' :
+      N.erro ? '<span class="erro">nuvem: ' + esc(N.erro) + '</span>' :
+      N.rodando || sync.pendente ? 'sincronizando…' :
+      'sincronizado com criptografia' + (sync.ultimo ? ' às ' + horaCurta(new Date(sync.ultimo)) : '')) +
     (S.semOffline ? ' · <span class="erro">modo sem internet indisponível</span>' : '');
 }
+const horaCurta = d => String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
 
 function irAba(id){
   if(id !== S.aba) S.sim = {salario: null, meta: null};   // simulação vale só dentro da Projeção
@@ -152,6 +163,7 @@ function salvar(mudar, msgOk){
     aviso(e.name === 'QuotaExceededError' ? 'Sem espaço neste aparelho: não salvou.' : e.message || 'Não consegui salvar.', true);
     return false;
   }
+  nuvemMudou();
   render();
   aviso(msgOk || 'Salvo ✓');
   return true;
@@ -668,18 +680,46 @@ function abaDados(){
       <div class="linha-b" style="margin-top:12px"><button class="bt cheio" data-acao="exportar">Exportar backup</button></div></div>`;
   }
 
+  const naNuvem = N.estado === 'pronta';
+  h += cartaoNuvem();
+
   h += `<div class="cartao"><div class="rot">Importar</div>
-    <div class="mini">${p ? '<b>Substitui tudo</b> o que está neste aparelho pelo conteúdo do arquivo. O app vai sugerir um backup antes.' : 'Escolha um arquivo de backup (.json) para começar.'}</div>
+    <div class="mini">${p ? '<b>Substitui tudo</b> o que está neste aparelho' + (naNuvem ? ', <b>na nuvem e nos outros aparelhos</b>,' : '') +
+      ' pelo conteúdo do arquivo. O app vai sugerir um backup antes.' : 'Escolha um arquivo de backup (.json) para começar.'}</div>
     <div class="linha-b" style="margin-top:12px">
       <button class="bt${p ? '' : ' cheio'}" data-acao="importar">Importar arquivo</button>
-      <button class="bt fantasma" data-acao="exemplo">Carregar exemplo fictício</button>
+      ${naNuvem ? '' : '<button class="bt fantasma" data-acao="exemplo">Carregar exemplo fictício</button>'}
     </div>
     ${temAnterior() ? `<div class="linha-b" style="margin-top:8px"><button class="bt fantasma" data-acao="desfazer">Desfazer última importação</button></div>` : ''}
   </div>`;
 
-  h += `<div class="mini" style="text-align:center;padding:0 8px">Os dados ficam só no navegador deste aparelho. Nada é enviado para servidor nenhum.
-    Se você limpar os dados do navegador ou desinstalar o app, eles se perdem: por isso o backup.</div>`;
+  h += `<div class="mini" style="text-align:center;padding:0 8px">${naNuvem
+    ? 'Os dados ficam neste aparelho e numa cópia <b>embaralhada</b> na nuvem, que só abre com a sua frase-senha.'
+    : 'Os dados ficam só no navegador deste aparelho. Nada é enviado para servidor nenhum.'}
+    Se você limpar os dados do navegador ou desinstalar o app, a cópia deste aparelho se perde: por isso o backup.</div>`;
   return h;
+}
+
+function cartaoNuvem(){
+  if(N.estado === 'desligada') return '';
+  const erro = N.erro ? `<div class="mini" style="margin-top:10px;color:var(--vermelho)"><b>${esc(N.erro)}</b></div>` : '';
+  if(N.estado === 'entrar') return `<div class="cartao"><div class="rot">Sincronização</div>
+    <div class="mini">Mantém este aparelho e os outros com os mesmos dados. Antes de sair daqui, os dados são <b>embaralhados com uma frase-senha</b>
+      que só você sabe: nem o Google consegue ler.</div>${erro}
+    <div class="linha-b" style="margin-top:12px"><button class="bt cheio" data-acao="nuvem-entrar">Entrar com Google</button></div></div>`;
+  if(N.estado === 'frase') return `<div class="cartao"><div class="rot">Sincronização · ${esc(N.email || '')}</div>
+    <div class="mini">Falta a frase-senha que embaralha os dados.</div>${erro}
+    <div class="linha-b" style="margin-top:12px">
+      <button class="bt fantasma" data-acao="nuvem-sair">Sair</button>
+      <button class="bt cheio" data-acao="nuvem-frase">Frase-senha</button></div></div>`;
+  const sync = lerSync();
+  return `<div class="cartao"><div class="rot">Sincronização · ligada</div>
+    <div class="legenda"><span>Conta</span><b>${esc(N.email || '')}</b></div>
+    <div class="legenda"><span>Última sincronização</span><b>${N.rodando ? 'agora…' : sync.ultimo ? dma(new Date(sync.ultimo)) + ' ' + horaCurta(new Date(sync.ultimo)) : '—'}</b></div>
+    <div class="legenda"><span>Mudanças a enviar</span><b class="${sync.pendente ? 'neg' : ''}">${sync.pendente ? 'sim' : 'não'}</b></div>${erro}
+    <div class="linha-b" style="margin-top:12px">
+      <button class="bt fantasma" data-acao="nuvem-sair">Desligar aqui</button>
+      <button class="bt" data-acao="nuvem-sincronizar">Sincronizar agora</button></div></div>`;
 }
 
 function resumoDoPlano(p){
@@ -721,7 +761,8 @@ async function sugerirBackup(oQue){
 async function confirmarESubstituir(novo, origem){
   const r = await perguntar({
     rot: origem, titulo: S.plano ? 'Substituir tudo por isto?' : 'Carregar estes dados?',
-    texto: resumoDoPlano(novo) + (S.plano ? '<br><br>Os dados atuais deste aparelho serão trocados. Dá para voltar com "Desfazer última importação".' : ''),
+    texto: resumoDoPlano(novo) + (S.plano ? '<br><br>Os dados atuais deste aparelho serão trocados. Dá para voltar com "Desfazer última importação".' : '') +
+      (N.estado === 'pronta' ? '<br><br><b>A sincronização está ligada: isto também substitui os dados na nuvem e nos outros aparelhos.</b>' : ''),
     botoes: [
       {valor:'cancelar', rotulo:'Cancelar', classe:'fantasma'},
       {valor:'ok', rotulo: S.plano ? 'Substituir tudo' : 'Carregar', classe: S.plano ? 'perigo' : 'cheio'},
@@ -736,6 +777,7 @@ async function confirmarESubstituir(novo, origem){
   }
   S.plano = novo;
   S.erroDados = null;
+  nuvemMudou(true);   // importou: este aparelho vira a verdade também na nuvem
   S.persistente = await pedirPersistencia();
   render();
   aviso('Dados carregados ✓');
@@ -777,6 +819,7 @@ async function desfazer(){
   if(!r) return;
   try{ S.plano = trocarPeloAnterior(); S.erroDados = null; }
   catch(e){ aviso(e.message, true); return; }
+  nuvemMudou(true);
   render();
   aviso('Dados anteriores de volta ✓');
 }
@@ -806,6 +849,10 @@ const ACOES = {
   'editar-fatura': bt => editarFatura(bt.dataset),
   'editar-conta': bt => editarConta(bt.dataset),
   'editar-divida': bt => editarDivida(bt.dataset),
+  'nuvem-entrar': entrarComGoogle,
+  'nuvem-frase': () => pedirFrase().catch(e => { N.erro = e.message; render(); }),
+  'nuvem-sincronizar': () => { N.erro = null; pintarStatus(); return sincronizar(); },
+  'nuvem-sair': sairDaNuvem,
 };
 
 document.addEventListener('click', e => {
@@ -849,3 +896,4 @@ if(navigator.storage && navigator.storage.persisted){
   navigator.storage.persisted().then(v => { S.persistente = v; if(S.aba === 'dados') render(); }).catch(() => {});
 }
 render();
+iniciarNuvem();
