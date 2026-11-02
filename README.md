@@ -29,7 +29,8 @@ do dia a dia.
 
 ## Decisões do projeto
 
-- Um único usuário. Sem servidor e sem sincronização pela nuvem.
+- Um único usuário. Sem servidor próprio; a sincronização entre aparelhos é opcional e
+  criptografada de ponta a ponta.
 - O formato do JSON segue o "plano" do app anterior, para que os dados possam ser migrados.
 - O mês financeiro é o **ciclo de salário**, e não o mês do calendário.
 - Lançamentos do dia a dia podem ser adicionados e editados no próprio app.
